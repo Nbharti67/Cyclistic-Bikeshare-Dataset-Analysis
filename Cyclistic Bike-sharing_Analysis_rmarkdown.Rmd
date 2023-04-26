@@ -1,0 +1,532 @@
+---
+title: "Cyclistic Bike-sharing Analysis"
+author: "Nisha Bharti"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction:
+
+
+#### About Cyclistic company
+Cyclistic is a bike-sharing company located in Chicago. This company offers reclining bike, hand tricycles, cargo bikes and bikes for people with disablities.
+
+There are two type of rides provided by company.
+1. Casual rides
+    + Single ride pass holders
+    + Full day Pass holders
+2. Rides provided to Annual members
+
+
+#### Cyclistic case study
+The director of marketing believes that the company’s future success depends on maximizing the number of annual memberships. Therefore, team wants to understand how casual riders and annual members use Cyclistic bikes differently. I am working as Junior Data Analyst in the team to help team understand the difference and eventually to help company's future to grow.
+
+
+
+### Ask phase of Data Analysis
+Ask the stakeholders (Director of marketing in this case) about their expectations. Below objectives are the expectations of stakeholders.
+
+#### Cyclistic case study Objective
+1. How do annual members and casual riders use Cyclistic bikes differently?
+2. Why would casual riders buy Cyclistic annual memberships?
+3. How can Cyclistic use digital media to influence casual riders to become members?
+
+
+
+
+### Preparing the data.
+Data sets have been provided by the company. Since the company is a virtual company, Google Data Analyitics Program has given the access of Kaggle cyclistic Dataset.I have downloaded the data for a year starting from July 2021 to June 2022 from server. Link for server is provided in the case study of the Google Data Analytics Program itself) and have saved in my local hard disk on my computer. The data is current, cited, accurate and reliable.
+
+
+
+
+### Processing the data
+Now, I have 12 files of data, a file for each month. Each file contains ride details of casual and annual member riders.
+  
+  
+  
+#### Install and call R packages.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(skimr)
+library(janitor)
+library(lubridate)
+```
+
+
+
+#### Check the dataset location and if location is not same as that of Project location, change the location of dataset for easy access.
+```{r}
+getwd()
+setwd("C:/Users/Nisha/OneDrive/Documents/Data Analyst/Case Study_Google_Data_Analytics/Case Study-1/Cyclistic Project/Cyclistic Dataset")
+```
+
+
+
+#### Load data sets.
+```{r}
+df1 <- read_csv("cyclistic_2021_07.csv")
+df2 <- read_csv("cyclistic_2021_08.csv")
+df3 <- read_csv("cyclistic_2021_09.csv")
+df4 <- read_csv("cyclistic_2021_10.csv")
+df5 <- read_csv("cyclistic_2021_11.csv")
+df6 <- read_csv("cyclistic_2021_12.csv")
+df7 <- read_csv("cyclistic_2022_01.csv")
+df8 <- read_csv("cyclistic_2022_02.csv")
+df9 <- read_csv("cyclistic_2022_03.csv")
+df10 <- read_csv("cyclistic_2022_04.csv")
+df11 <- read_csv("cyclistic_2022_05.csv")
+df12 <- read_csv("cyclistic_2022_06.csv")
+```
+
+
+
+#### We are analyzing data of july 2021 to june 2022 and there are separate files for all months therefore we have to merge all file. Before merging, compare the data files to each other to verify if they can be merged
+
+```{r}
+compare_df_cols(df1, df2, df3, df4, df5, df6, df7, df8, df9, df10, df11, df12)
+```
+
+
+
+#### Merge the files since column and their data types of all data files matches
+```{r}
+Data <- rbind(df1, df2, df3, df4, df5, df6, df7, df8, df9, df10, df11, df12)
+```
+
+
+
+
+#### Check the structure of data
+```{r}
+str(Data)
+```
+
+
+
+#### I observed that started_at and ended_at column is in POSXct and POSXIt so used strptime to update the column value to YMD, HMS
+```{r}
+Data$started_at = strptime(Data$started_at, "%Y-%m-%d %H:%M:%S")
+Data$ended_at = strptime(Data$ended_at, "%Y-%m-%d %H:%M:%S")
+```
+
+
+
+#### Run str() function to check if the data types converted correctly
+```{r}
+str(Data)
+```
+
+
+
+#### Now, it's time to check the accuracy of data. For this calculate duration of ride and if duration is negative, that means that data row is not accurate.
+```{r}
+Data <- mutate(Data, duration = difftime(ended_at, started_at, unit="secs"))
+```
+
+
+
+#### Remove inaccurate data row
+```{r}
+Data <- filter(Data, duration>0)
+str(Data)
+```
+
+
+#### Now, to check/compare which day of the week, bikes renting is maximum, create Weekday column 
+```{r}
+Data <- mutate(Data, Weekday=weekdays(Data$started_at))
+```
+
+
+#### Remove rows which have blank cell
+```{r}
+Data_NA <- na.omit(Data)
+```
+
+
+#### Add ridetime in minute column in the data file to get the ride time in minutes.
+```{r}
+Data_NA <- mutate(Data_NA, ride_time_min = as.numeric(Data_NA$ended_at -Data_NA$started_at)/60)
+```
+
+
+
+#### Find summary of ride_time_min column
+```{r}
+summary(Data_NA$ride_time_min)
+```
+Looking at the ride time in minute summary, we found that
+  + Minimum duration of ride is 0.02 i.e 12 sec which looks not feasible
+  + Maximum duration of ride time in 55944.15 i.e. 932.403 hrs i.e.38.85 days which is also not feasible.
+  
+We need to clean these two data because are not correct.
+
+
+
+
+#### We will add month of the year column so that when we create graph we can create graph for monthly distribution of annual and casual riders.
+```{r}
+Data_NA <- mutate(Data_NA, year_month = paste(strftime(Data_NA$started_at, "%Y"), "-", strftime(Data_NA$started_at, "%m"), paste("(",strftime(Data_NA$started_at, "%b"), ")", sep = "")))
+```
+
+
+
+#### Find unique months to verify if we are going in right direction.
+```{r}
+unique(Data_NA$year_month)
+```
+
+
+
+#### Create a starting hour column. The starting hour will be useful to create graph to determine patterns of travels in the week.
+```{r}
+Data_clean <- mutate(Data_NA, start_hour = strftime(Data_NA$ended_at, "%H"))
+unique(Data_clean$start_hour)
+```
+
+
+#### Clean up weird ride_time in minute data that we found before.
+```{r}
+ventiles = quantile(Data_NA$ride_time_min, seq(0,1, by=0.05))
+ventiles
+```
+
+
+
+#### Difference between Data_NA, Data_Clean and Cyclistics dataset are following
+  * Data_NA dataset doesn't have starting hour of ride column
+  * Data_clean contains min and max ride time in min. It has one column extra than Data_NA. i.e.starting hour column
+  * Cyclistic dastaset doesn't have max and min ride time in min
+
+
+
+
+#### Filter/clean maximum and minimum ride_time because these time are not accurate.
+```{r}
+Cyclistic <- Data_clean %>%
+  filter(ride_time_min >as.numeric(ventiles['5%'])) %>%
+  filter(ride_time_min < as.numeric(ventiles['95%']))
+```
+
+
+
+#### Print the number of rows we removed. Removed data had incorrect  ride time. i.e. minumu ride_time and maximum ride_ time.
+```{r}
+print(paste("Removed", nrow(Data_NA) - nrow(Cyclistic), "rows as outliers"))
+```
+
+
+#### Save the cleaned data data as .csv file.
+```{r}
+Cyclistic %>%
+  write.csv("Cyclistic.csv")
+```
+
+#### Resize the kernel
+```{r}
+fig <- function(width, height) {options (repr.plot.width = width, repr.plot.height = height)}
+```
+
+
+
+
+### Analyze & Visualize the cleaned data
+Now that we have cleaned the data, it's time to anlyze and visualize the data through graphs and eventually to find some meaningful insights.
+
+
+
+#### View first some rows of the data.
+```{r}
+head(Cyclistic)
+```
+
+
+#### Compare annual Member riders versus Casual riders
+```{r}
+Cyclistic %>%
+  group_by(member_casual) %>%
+  summarise(count = length(ride_id), "%" = (length(ride_id)/nrow(Cyclistic)) *100)
+```
+
+Result of summarizing riders shows us that currently there are 58.7% of annual member riders and 41.3% are casual riders
+
+
+
+##### Graph for showing casual rider versus annual/member riders
+```{r}
+ggplot(data = Cyclistic)+
+  geom_bar(mapping = aes(x=member_casual, color = member_casual, fill = member_casual))+
+  labs(title ="Member vs. Casual Distribution") +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1))
+```
+
+From the graph here, 
+      * we can see that annual members count is greater than causal riders.
+      * Difference = (24,68,902 - 17,40,060) = 7,28,842 
+      * Count of annual members are 7,28,842 more than casual riders.
+
+
+
+
+
+#### Now let's find the monthly distribution of members and casual riders.
+```{r}
+Cyclistic %>%
+  group_by(year_month) %>%
+  summarise(count = length(ride_id), '%' = (length(ride_id)/nrow(Cyclistic)) * 100, 'member_percent' = (sum(member_casual == "member")/length(ride_id)) * 100, 'casual_percent' = (sum(member_casual == "casual")/length(ride_id)) * 100, 'Member_vs_Casual_Percent' = member_percent - casual_percent)
+```
+
+
+Looking at the tibble above, we can say that 
+    * Annual members count is more by 40% or more than 40% in the month of Nov 2021,Dec 2021, Jan 2022, Feb 2022 and March 2022.
+    * Riders prefer to ride in colder month.
+
+
+
+
+##### Plot to view monthly distribution of annual and casual riders.
+```{r}
+ggplot(data = Cyclistic)+
+  geom_bar(mapping = aes(x = year_month, fill = member_casual))+
+  labs(x= "Month", title = "Distribution by Month")+
+  theme(axis.text.x = element_text(angle = 50, hjust = 1, vjust = 1)) + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 1))
+```
+From the graph above, we found that
+    * People ride Cyclistic bike more in the month of July. i.e. Count of rider is more in July and start decreasing and it is minimum in January.
+    * People ride bike in summer months starting from May to October.
+    * There is approximately even split of casual and annual member riders in warmer month
+    * Annual member ride bike more as comparison to casual riders in winter season.
+ 
+ 
+    
+
+#### Compare weekday Distribution of annual and casual riders
+```{r}
+Cyclistic %>%
+  group_by(Weekday) %>%
+  summarise(count = length(ride_id), '%'=(length(ride_id) / nrow(Cyclistic)) * 100, 'member_percent' = (sum(member_casual == "member") / length(ride_id)) * 100, 'casual_percent' = (sum(member_casual == "casual") / length(ride_id)) * 100, 'Member_v_Casual_Percent' = member_percent - casual_percent) %>%
+  arrange(Weekday)
+```
+
+
+Looking at the tibble above, we can conclude that
+  * Casual rider over weighs member riders on Saturday and Sunday of the week.
+
+
+
+
+##### Plot for Weekday Distribution of annual and casual riders.
+```{r}
+Cyclistic$Weekday <- factor(Cyclistic$Weekday, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+ggplot(data = Cyclistic) +
+  geom_bar(mapping = aes(x = Weekday, fill = member_casual)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Distibution by Weekday") +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1))
+```
+
+
+We observed the following from the plot.
+    * riders count is more on weekends
+    * Count of riders is maximum on Saturday.
+
+
+
+
+#### Compare hourly Distribution of annual and casual riders
+```{r}
+Cyclistic %>%
+  group_by(start_hour) %>%
+  summarise(count = length(ride_id), '%' = (length(ride_id) / nrow(Cyclistic)) * 100, 'members_percent' = (sum(member_casual == "member") / length(ride_id))*100, 'casual_percent' = (sum(member_casual == "casual") / length(ride_id)) * 100, 'Member_v_Casual_Percent' = members_percent - casual_percent)
+```
+
+
+
+##### Plot for hourly distribution of annual and casual riders
+```{r}
+ggplot(data = Cyclistic) +
+  geom_bar(mapping = aes(x= start_hour, fill = member_casual, )) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 0.5)) +
+  labs(x = "Hour Of the Day", title = "Distribution by Hour") +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1))
+```
+
+
+We can observe the following from the graph below.
+  * People ride cyclistic bike mostly in the late afternoon and early evening starting from 2:30 PM to 7:30 PM.
+  * Count of people is maximum from 6:30 to 7:30 PM i.e. the time when people come back to their home from office.
+  * Members ride the bike more  from 5:00AM to 10:00PM.
+  * Count of members is approximately more than twice from 5:00 AM to 9 PM.
+
+
+
+
+#### Compare hourly distribution by day of annual and casual riders
+```{r}
+ggplot(data = Cyclistic) +
+  geom_bar(mapping = aes(x = start_hour, fill = member_casual)) +
+  facet_wrap(~ Weekday) +
+  theme_gray(base_size = 5)
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Distribution by hour of the day divided by weekday", x = "Hour of the Day")
+```
+
+Looking at plots, we can conclude that
+  * Members riders over weigh Casual rider on weekdays while casual riders over weigh on weekends
+  * Count of members is approximately double of Casual riders on weekdays
+  * Casual rider count on weekend is maximum from 10:30 AM to 6:30 PM
+  * Member riders count is more in commuter hours i.e. from 3:00 PM  to 7:00 PM
+
+
+
+
+#### Data distribution by bike type
+```{r}
+Cyclistic %>%
+  group_by(rideable_type) %>%
+  summarise(count = length(ride_id), '%' = (length(ride_id) / nrow(Cyclistic))*100, 'members_percent' = sum(member_casual == "member") / length(ride_id) * 100, 'casual_percent' = sum(member_casual == "casual") / length(ride_id) * 100, 'Member_v_Casual_Percent' = members_percent - casual_percent)
+```
+
+
+From the tibble above, we observe that,
+
+  * Member doesn't ride docked_bike.
+  * Member ride classic and electric bike more as compare to casual riders.
+  
+
+
+
+##### plot for data distribution by bike type
+```{r}
+ggplot(data = Cyclistic) +
+  geom_bar(mapping = aes(x = rideable_type, fill = member_casual)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Bike Type", title = "Distribution of Bike types") +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1))
+```
+
+
+From the graph above, we observe that,
+  * Rider prefer to ride classic bike and doesn't prefer to ride docked bike.
+  * Member riders prefer classic bike over other bike types
+
+
+
+
+#### Plot for rider type data distribution by ride time
+```{r}
+ggplot(data = Cyclistic) +
+  geom_boxplot(mapping = aes(x = member_casual, y = ride_time_min, fill =member_casual)) +
+  labs(x ="Members vs Casual", y = "Ride Time (min)", title = "Distribution of Ride Time by Rider Type")
+```
+
+
+Looking at the graph above, we can conclude that
+  * Average Ride time of casual riders over weigh members.
+  
+
+
+
+#### Plot for ride time compare by weekday
+```{r}
+ggplot(data = Cyclistic) +
+  geom_boxplot(mapping = aes(x = ride_time_min, y = Weekday, fill = member_casual)) +
+  facet_wrap(~member_casual) +
+  labs(x = "Ride Time (min)", y = "Weekday", title = "Distribution of Ride Time by Weekday") 
+```
+
+
+Looking at the graph above, we can conclude that,
+  * Ride time of member on weekdays is consistent.
+  * Ride time average is more on weekends as compare to weekdays
+  * Ride time of casual riders is fluctuating. It is maximum on Monday, Saturday and Sunday for casual riders and minimum and consistent on Tuesday, Wednesday and Thursday.
+  
+
+
+#### Plot for ride time compared by bike type
+```{r}
+ggplot(data = Cyclistic) +
+  geom_boxplot(mapping = aes(x = ride_time_min, y = rideable_type, fill = member_casual)) +
+  facet_wrap(~member_casual) +
+  labs(x = "Ride Time(min)", y = "Bike Type", title = "Distribution of Ride Time by Bike Type")
+```
+
+
+Looking at the graph above, we can conclude that,
+  * electric-bike's average ride time is minimum for both member and casual riders.
+  * docked-bike's average ride time is maximum for casual riders but ride time for this bike type is zero for members.
+  * Classic bike's ride time for both casual and member riders is longer as compare to other bike types.
+
+
+
+
+
+## Share phase of Data analysis process.
+
+Finding from Data Analysis are
+  * Currently there are 58.7% of annual member riders and 41.3% are casual riders
+  * People ride Cyclistic bike more in the month of July. i.e. Count of rider is more in July and start decreasing and it is minimum in January.      * People prefer to ride in summer months starting from May to October.
+  * There is approximately even split of casual and annual member riders in warmer month
+  * Annual member ride bike more as comparison to casual riders in winter season.
+  * Riders count is more on weekends
+  * Casual rider over weighs member riders on Saturday and Sunday of the week and riders count is  maximum on saturday
+  * People ride cyclistic bike mostly in the late afternoon and early evening starting from 2:30 PM to 7:30 PM.
+  * Count of people is maximum from 6:30 PM to 7:30 PM i.e. the time when people come back to their home from office.
+  * Members ride the bike more  from 5:00AM to 10:00PM.
+  * Count of members is approximately more than twice from 5:00 AM to 9 PM.
+  * Members riders over weigh Casual rider on weekdays while casual riders over weigh on weekends
+  * Count of members is approximately double of Casual riders on weekdays
+  * Casual rider count on weekend is maximum from 10:30 AM to 6:30 PM
+  * Member riders count is more in commuter hours i.e. from 3:00 PM  to 7:00 PM
+  * Member doesn't ride docked_bike.
+  * Member ride classic and electric bike more as compare to casual riders.
+  * Member riders prefer classic bike over other bike types
+  * Ride time of member on weekdays is consistent.
+  * Ride time average is more on weekends as compare to weekdays
+  * Ride time of casual riders is fluctuating. It is maximum on Monday, Saturday and Sunday for casual riders and minimum and consistent on Tuesday, Wednesday and Thursday.
+  * Average Ride time of casual riders over weigh members.
+  * electric-bike's average ride time is minimum for both member and casual riders.
+  * docked-bike's average ride time is maximum for casual riders but ride time for this bike type is zero for members.
+  * Classic bike's ride time for both casual and member riders is longer as compare to other bike types.
+
+
+
+##### Conclusions fron Analysis.
+  * Riders prefer to ride in Summer. Riders count is maximum in summer and it decreases and is minimum in winter season.
+  * Casual rider over weighs member riders on Saturday and Sunday of the week.
+  * Annual riders over weight casual riders on weekdays during Commuter hours
+  * Member doesn't ride docked_bike.
+  * Classic bike riders count is maximum and docked bike riders is minimum.
+  * Average Ride time of casual riders over weigh members. That means casual riders use the bike for vacation/ visiting tourist places.
+  * Ride time average is more on weekends as compare to weekdays
+  * Classic bike's ride time for both casual and member riders is longer as compare to other bike types.
+  * Electric-bike's average ride time is minimum for both member and casual riders.
+
+    
+    
+    
+    
+## Act Phase of Data Analysis process
+  * We observed from our analysis that ride time of casual several times more than annual members so we can offer better rental structure for long      term bike holding. For members, we can provide them more facility like – members have not to worry about when to return the bike. 
+  * The company can have a pact with ice-cream shop and cold drink shop to provide members free drink in summer season and hot coffee and such free     snack in summer season. We can also run the campaign just before the summer season starts and can tell people benefits of using Cyclistic bike.
+  * We have observed that riders count and average ride time is more on weekends. Here we can partner with tourism company like trip advisory, make     my trip, Goibibo etc and Hotels and companies which provide accommodation facility like Oyo in a tourist place to offer discount to Cyclistic       members.
+  * Seasonal nature of bike use has been seen so to increate the membership, we can provide seasonal nature of membership i.e. membership for 3         months, 6 months 9 month and 12 months.
+  * We observed through analysis that riders count is minimum in winter season. We can give discount and free trails to new users for increasing the    count of riders in winter. 
+  * We can promote all these newly added scheme through Facebook, You tube, Instagram, TV ads etc.
+
+    
+    
+    
+    
+    
